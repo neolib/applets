@@ -1,2 +1,2 @@
 # applets
-Tiny one file program or code snippets
+Tiny single file programs or code snippets
