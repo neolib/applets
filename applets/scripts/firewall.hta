@@ -1,0 +1,204 @@
+<html>
+<head>
+<hta:application id="app"
+    applicationname="firewallvalidator"
+    border="yes"
+	borderstyle="static"
+	singleinstance="yes"
+	contextmenu="no"
+>
+<title>Firewall Validator</title>
+<script type="text/javascript">
+// Profile Type
+var NET_FW_PROFILE2_DOMAIN = 1
+var NET_FW_PROFILE2_PRIVATE = 2
+var NET_FW_PROFILE2_PUBLIC = 4
+
+// Protocol
+var NET_FW_IP_PROTOCOL_TCP = 6
+var NET_FW_IP_PROTOCOL_UDP = 17
+var NET_FW_IP_PROTOCOL_ICMPv4 = 1
+var NET_FW_IP_PROTOCOL_ICMPv6 = 58
+
+// Direction
+var NET_FW_RULE_DIR_IN = 1
+var NET_FW_RULE_DIR_OUT = 2
+
+// Action
+var NET_FW_ACTION_BLOCK = 0
+var NET_FW_ACTION_ALLOW = 1
+
+var g_tableRules
+var g_fwPolicy2
+
+function insert_rules_row(title, value)
+{
+	if (!g_tableRules) g_tableRules = document.getElementById("rules")
+	var tr = g_tableRules.insertRow()
+	var td = tr.insertCell()
+	td.innerText = title
+	td = tr.insertCell()
+	var label = document.createElement("SPAN")
+	label.innerText = value
+	td.appendChild(label)
+	return tr
+}
+
+function delete_rule()
+{
+	var td = this.parentElement
+	var tr = td.parentElement
+	var rule = tr.meta_rule_object
+	var label = td.children[0]
+	var name = label.innerText
+	var s = "Delete this rule: " + name
+	if (confirm(s))
+	{
+		try {
+			rule.Name = "TO_BE_DELETED" + Math.random()
+			g_fwPolicy2.Rules.Remove(rule.Name)
+			tr.className = "rule_deleted"
+			this.disabled = true
+		} catch (ex) {
+			// Restore name
+			rule.Name = name
+			alert(ex.message)
+		}
+	}
+}
+
+function load_broken_rules()
+{
+	// HTML elements
+	var divMsg = document.getElementById("profiles")
+
+	var currentProfiles = g_fwPolicy2.CurrentProfileTypes
+	var msg = 'Active profiles:'
+	if (currentProfiles & NET_FW_PROFILE2_DOMAIN)
+	   msg += " Domain"
+
+	if (currentProfiles & NET_FW_PROFILE2_PRIVATE)
+	   msg += " Private"
+
+	if (currentProfiles & NET_FW_PROFILE2_PUBLIC)
+	   msg += " Public"
+	divMsg.innerText = msg
+
+	for(var e = new Enumerator(g_fwPolicy2.Rules); !e.atEnd(); e.moveNext())
+	{
+		var rule = e.item()
+		if (rule.Profiles & currentProfiles)
+		{
+			var s = rule.ApplicationName
+			if (s.charAt(1) != ':' || g_fso.FileExists(s)) continue
+
+			var tr = insert_rules_row("Rule Name:", rule.Name)
+			tr.className = "rule"
+			var btn = document.createElement("BUTTON")
+			btn.innerText = "Delete Rule"
+			btn.className = "delete_rule"
+			btn.onclick = delete_rule
+			tr.meta_rule_object = rule
+			tr.cells[1].appendChild(btn)
+
+			tr = insert_rules_row("Description:", rule.Description)
+			tr = insert_rules_row("Program:", rule.ApplicationName)
+			tr = insert_rules_row("Service Name:", rule.ServiceName)
+
+			switch (rule.Protocol)
+			{
+			case NET_FW_IP_PROTOCOL_TCP:
+				s = "TCP"
+				break
+			case NET_FW_IP_PROTOCOL_UDP:
+				s = "UDP"
+				break
+			case NET_FW_IP_PROTOCOL_ICMPv4:
+				s = "ICMPv4"
+				break
+			case NET_FW_IP_PROTOCOL_ICMPv6:
+				s = "ICMPv6"
+				break
+			default:
+				s = "Unknown - " + rule.Protocol
+			}
+			tr = insert_rules_row("Service Name:", s)
+
+			if (rule.Protocol == NET_FW_IP_PROTOCOL_TCP || rule.Protocol == NET_FW_IP_PROTOCOL_UDP)
+			{
+				tr = insert_rules_row("Local Ports:", rule.LocalPorts)
+				tr = insert_rules_row("Remote Ports:", rule.RemotePorts)
+				tr = insert_rules_row("LocalAddresses:", rule.LocalAddresses)
+				tr = insert_rules_row("RemoteAddresses:", rule.RemoteAddresses)
+			}
+			if (rule.Protocol == NET_FW_IP_PROTOCOL_ICMPv4 || rule.Protocol == NET_FW_IP_PROTOCOL_ICMPv6)
+			{
+				tr = insert_rules_row("ICMP Type and Code:", rule.IcmpTypesAndCodes)
+			}
+
+			switch (rule.Direction)
+			{
+			case NET_FW_RULE_DIR_IN: s = "In"; break
+			case NET_FW_RULE_DIR_OUT: s = "Out"; break
+			default: s = "Unknown"; break
+			}
+			tr = insert_rules_row("Direction:", s)
+			tr = insert_rules_row("Enabled:", rule.Enabled)
+			tr = insert_rules_row("Edge:", rule.EdgeTraversal)
+
+			switch(rule.Action)
+			{
+			case NET_FW_ACTION_ALLOW: s = "Allow"; break
+			case NET_FW_ACTION_BLOCk: s = "Block"; break
+			default: s = "Unknown"; break
+			}
+			tr = insert_rules_row("Action:", s)
+
+			tr = insert_rules_row("Grouping:", rule.Grouping)
+			tr = insert_rules_row("Edge:", rule.EdgeTraversal)
+			tr = insert_rules_row("Interface Types:", rule.InterfaceTypes)
+
+			if (!rules.Interfaces || rules.Interfaces.length == 0)
+				s = "All"
+			else
+			{
+				s = ''
+				for (var i = 0; i < rules.Interfaces.length; i++)
+					s += rules.Interfaces[i] + ","
+				if (s.length > 0 && s[s.length - 1] == ',') s.length--;
+			}
+			tr = insert_rules_row("Interfaces:", s)
+		}
+	}
+}
+
+function window.onload()
+{
+	g_fso = new ActiveXObject("Scripting.FileSystemObject")
+	// Create the FwPolicy2 object.
+	g_fwPolicy2 = new ActiveXObject("HNetCfg.FwPolicy2")
+	load_broken_rules()
+}
+</script>
+<style type="text/css">
+body { font-family: Sans-Serif; font-size: 93%; }
+td { font-size: x-small }
+button { font-family: Sans-Serif; font-size: x-small }
+.rule { background-color: #fafbff; color: red }
+.rule_deleted { background-color: #abcdff; color: red }
+.rules { border-collapse: collapse; border-style: groove }
+.delete_rule { color: red }
+</style>
+</head>
+
+<body>
+<table border="1" id="rules" class="rules">
+<tr>
+	<th colspan="2">Broken Firewall Rules</th>
+</tr>
+<tr>
+	<td colspan="2"><div id="profiles"></div></td>
+</tr>
+</table>
+</body>
+</html>
